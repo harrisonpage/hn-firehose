@@ -8,6 +8,10 @@ Blog post: [Hacker News Firehose for iOS](https://blog.harrison.page/hacker-news
 
 Claude was able to one-shot this given a spec and screenshots.
 
+<p align="center">
+  <img src="screenshot.png" width="300" alt="HN Firehose on iPhone">
+</p>
+
 Source here: [github.com/harrisonpage/hn-firehose](https://github.com/harrisonpage/hn-firehose)
 
 Reading model is simple:
