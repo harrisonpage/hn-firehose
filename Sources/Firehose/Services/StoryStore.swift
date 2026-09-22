@@ -11,7 +11,10 @@ final class StoryStore {
         case pageFailed     // footer retry; loaded rows unaffected
     }
 
+    /// What the list shows: `accepted` minus whatever the killfile eats.
     private(set) var stories: [Story] = []
+    /// Stories the killfile removed from `accepted`.
+    private(set) var hiddenCount = 0
     private(set) var loadState: LoadState = .cold
     private(set) var lastSuccessfulRefresh: Date?
 
@@ -19,8 +22,12 @@ final class StoryStore {
     var now = Date()
 
     let metadata = MetadataCache()
+    let killfile: KillfileStore
 
     private let client = AlgoliaClient()
+    /// Every story that survived URL/title validation and dedup, killfile or
+    /// not, so a rule change can be applied without refetching.
+    private var accepted: [Story] = []
     private var loadedIDs = Set<String>()
     /// Smallest created_at_i across all raw hits seen (including dropped
     /// ones), so the cursor always advances even through pages the killfile
@@ -33,6 +40,10 @@ final class StoryStore {
     /// pagination can never fire — below this count we fetch more eagerly.
     private static let minimumScrollableCount = 25
 
+    init(killfile: KillfileStore) {
+        self.killfile = killfile
+    }
+
     /// Pull-to-refresh and cold load: discard everything and refetch page one
     /// from scratch. On failure the previously loaded rows are kept and the
     /// offline banner shows. An empty response is treated as a failure — the
@@ -41,7 +52,7 @@ final class StoryStore {
         do {
             let hits = try await client.fetchPage()
             guard !hits.isEmpty else { throw URLError(.badServerResponse) }
-            stories.removeAll()
+            accepted.removeAll()
             loadedIDs.removeAll()
             cursor = nil
             metadata.clear()
@@ -85,11 +96,21 @@ final class StoryStore {
             }
             guard let story = Story(hit: hit) else { continue }
             guard !loadedIDs.contains(story.id) else { continue }
-            guard !Killfile.kills(title: story.title, host: story.host) else { continue }
             loadedIDs.insert(story.id)
-            stories.append(story)
+            accepted.append(story)
         }
         // Algolia's ordering (newest first) is preserved: appends only.
+        applyKillfile()
+    }
+
+    /// Re-derives the visible list from `accepted`. Called after every
+    /// ingest and whenever the rules change, so muting a site from the
+    /// context menu takes effect on rows already on screen.
+    func applyKillfile() {
+        let rules = killfile.rules
+        let visible = accepted.filter { !Killfile.kills(title: $0.title, host: $0.host, rules: rules) }
+        hiddenCount = accepted.count - visible.count
+        if visible != stories { stories = visible }
     }
 
     private func topUpIfNeeded() async {

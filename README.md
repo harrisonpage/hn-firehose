@@ -1,4 +1,4 @@
-# Firehose
+# HN Firehose
 
 Blog post: [Hacker News Firehose for iOS](https://blog.harrison.page/hacker-news-firehose-ios/)
 
@@ -18,7 +18,7 @@ Reading model is simple:
 
 Content is ephemeral. There's value in the unfiltered firehose of submissions, most are low quality but occasional gems surface.
 
-The app talks to one external service: the **Algolia HN Search API** (`hn.algolia.com/api/v1`)
+The app talks to one external service: the **Algolia HN Search API** (`hn.algolia.com/api/v1`). The only thing it stores is your killfile, in iCloud key-value storage.
 
 ## Platform
 
@@ -29,7 +29,7 @@ The app talks to one external service: the **Algolia HN Search API** (`hn.algoli
 ## Features
 
 * Drop any headline where `url` is nil effectively removing Ask HN and text-only posts
-* Killfile support by word or hostname (currently hardcoded)
+* Killfile: hide stories by site or by word. Edit from the eye-slash button in the header, or long-press a story to hide its site. Rules sync across your devices through iCloud key-value storage and fall back to local storage without an iCloud account
 * Link previews formed with available Open Graph metadata on long-press — a story's page is fetched only when you long-press it, never while scrolling
 * Menu items: Add to Reading List, Share, Open in Safari
 
@@ -85,11 +85,12 @@ xcodebuild -project Firehose.xcodeproj -scheme Firehose \
 
 ## Killfile
 
-There is no filter UI. Rules live in
-`Sources/Firehose/Services/Killfile.swift` as a compile-time constant — edit
-and rebuild. Phrase rules match on token boundaries (an `AI` rule will not
-kill "Ukraine"); domain rules match label suffixes (`wikipedia.org` kills
-`en.wikipedia.org` but not `notwikipedia.org`).
+Rules are edited in the app (eye-slash button in the header, or long-press a
+story to hide its site) and stored in iCloud key-value storage, mirrored to
+`UserDefaults` for devices without an iCloud account. Matching lives in
+`Sources/Firehose/Services/Killfile.swift`. Phrase rules match on token
+boundaries (an `AI` rule will not kill "Ukraine"); domain rules match label
+suffixes (`wikipedia.org` kills `en.wikipedia.org` but not `notwikipedia.org`).
 
 ## License
 

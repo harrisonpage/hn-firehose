@@ -7,6 +7,9 @@ struct AboutPanel: View {
     @Environment(\.openURL) private var openURL
 
     private static let sourceURL = URL(string: "https://github.com/harrisonpage/firehose-ios")!
+    private static let homeURL = URL(string: "https://harrison.page")!
+    private static let blogURL = URL(string: "https://blog.harrison.page/")!
+    private static let blueskyURL = URL(string: "https://bsky.app/profile/harrison.page")!
 
     var body: some View {
         ZStack {
@@ -20,7 +23,7 @@ struct AboutPanel: View {
 
     private var panel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("FIREHOSE")
+            Text("HN FIREHOSE")
                 .font(Theme.wordmark)
                 .kerning(2.4)
                 .foregroundStyle(Theme.metaGrey)
@@ -39,15 +42,10 @@ struct AboutPanel: View {
                 row(label: "Author") {
                     Text("Harrison Page").foregroundStyle(Theme.ink)
                 }
-                row(label: "Source") {
-                    Button {
-                        openURL(Self.sourceURL)
-                    } label: {
-                        Text("github.com/harrisonpage/firehose-ios")
-                            .foregroundStyle(Theme.accentText)
-                    }
-                    .buttonStyle(.plain)
-                }
+                link(label: "Home Page", text: "harrison.page", url: Self.homeURL)
+                link(label: "Blog", text: "blog.harrison.page", url: Self.blogURL)
+                link(label: "Bluesky", text: "@harrison.page", url: Self.blueskyURL)
+                link(label: "Source", text: "github.com/harrisonpage/firehose-ios", url: Self.sourceURL)
                 row(label: "License") {
                     Text("MIT").foregroundStyle(Theme.ink)
                 }
@@ -74,6 +72,20 @@ struct AboutPanel: View {
         .padding(20)
         .background(Theme.ground)
         .border(Theme.ink, width: 2)
+    }
+
+    private func link(label: String, text: String, url: URL) -> some View {
+        row(label: label) {
+            Button {
+                openURL(url)
+            } label: {
+                Text(text)
+                    .foregroundStyle(Theme.accentText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func row(label: String, @ViewBuilder value: () -> some View) -> some View {

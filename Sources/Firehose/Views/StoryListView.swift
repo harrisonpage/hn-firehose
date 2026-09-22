@@ -2,8 +2,10 @@ import SafariServices
 import SwiftUI
 
 struct StoryListView: View {
-    @State private var store = StoryStore()
+    @State private var killfile: KillfileStore
+    @State private var store: StoryStore
     @State private var showAbout = false
+    @State private var showKillfile = false
     @State private var safariItem: SafariItem?
     @State private var toast: String?
     @State private var toastDismissal: Task<Void, Never>?
@@ -11,6 +13,12 @@ struct StoryListView: View {
     @Environment(\.openURL) private var openURL
 
     private let ageTick = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    init() {
+        let killfile = KillfileStore()
+        _killfile = State(initialValue: killfile)
+        _store = State(initialValue: StoryStore(killfile: killfile))
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -26,6 +34,15 @@ struct StoryListView: View {
         .background(Theme.ground.ignoresSafeArea())
         .task { await store.refresh() }
         .onReceive(ageTick) { store.now = $0 }
+        .onChange(of: killfile.rules) { store.applyKillfile() }
+        .sheet(isPresented: $showKillfile) {
+            KillfileView(
+                killfile: killfile,
+                hiddenCount: store.hiddenCount,
+                loadedCount: store.stories.count + store.hiddenCount
+            ) { showKillfile = false }
+            .presentationDragIndicator(.visible)
+        }
         .sheet(item: $safariItem) { item in
             SafariView(url: item.url)
                 .ignoresSafeArea()
@@ -50,7 +67,7 @@ struct StoryListView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text("HACKER NEWS FIREHOSE")
+            Text("HN FIREHOSE")
                 .font(Theme.wordmark)
                 .kerning(2.4)
                 .foregroundStyle(Theme.headerInk)
@@ -62,6 +79,17 @@ struct StoryListView: View {
                 .foregroundStyle(Theme.headerInk)
                 .lineLimit(1)
             Spacer(minLength: 0)
+            Button {
+                showKillfile = true
+            } label: {
+                Image(systemName: store.hiddenCount > 0 ? "eye.slash.fill" : "eye.slash")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Theme.headerInk)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Killfile")
             Button {
                 showAbout = true
             } label: {
@@ -146,6 +174,13 @@ struct StoryListView: View {
         } label: {
             Label("Open in Safari", systemImage: "safari")
         }
+        Divider()
+        Button {
+            killfile.add(.domain(story.host))
+            showToast("Hiding \(story.host)")
+        } label: {
+            Label("Hide \(story.host)", systemImage: "eye.slash")
+        }
     }
 
     // MARK: Toast
@@ -163,11 +198,10 @@ struct StoryListView: View {
     private func toastView(_ message: String) -> some View {
         Text(message)
             .font(Theme.meta)
-            .foregroundStyle(Theme.ink)
+            .foregroundStyle(Theme.headerInk)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(Theme.ground)
-            .border(Theme.ink, width: 2)
+            .background(Theme.headerFill, in: RoundedRectangle(cornerRadius: 8))
             .padding(.bottom, 24)
             .transition(.opacity)
     }
