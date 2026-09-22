@@ -29,9 +29,18 @@ echo "firehose-ios ${VERSION}/${BUILD}"
 
 # Device signing needs an Apple Developer team. The team ID is not checked in;
 # export DEVELOPMENT_TEAM (see harrison.sh in the private repo) or set your own.
+#
+# Bundle IDs are unique across all Apple teams, so a build signed by another
+# team cannot use page.harrison.Firehose: automatic provisioning fails with
+# "An App ID with Identifier ... is not available". Export BUNDLE_ID_PREFIX
+# (e.g. com.example) to build as com.example.Firehose instead. The test
+# target and the iCloud KVS entitlement follow the prefix automatically.
 TEAM_ARGS=()
 if [ -n "$DEVELOPMENT_TEAM" ]; then
     TEAM_ARGS+=("DEVELOPMENT_TEAM=$DEVELOPMENT_TEAM")
+fi
+if [ -n "$BUNDLE_ID_PREFIX" ]; then
+    TEAM_ARGS+=("FIREHOSE_BUNDLE_ID_PREFIX=$BUNDLE_ID_PREFIX")
 fi
 
 # Signing a device build needs the private key that lives in your login

@@ -1,7 +1,8 @@
 #!/bin/bash
 # Shared functions for deploying Firehose to iOS devices
 
-BUNDLE_ID="page.harrison.Firehose"
+# Overridable so other developers can deploy under their own team; see build.sh.
+BUNDLE_ID="${BUNDLE_ID_PREFIX:-page.harrison}.Firehose"
 
 find_device() {
     local name="$1"
