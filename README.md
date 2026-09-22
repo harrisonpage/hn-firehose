@@ -4,7 +4,7 @@ Blog post: [Hacker News Firehose for iOS](https://blog.harrison.page/hacker-news
 
 ## Saturday Morning Project
 
-> Ask Claude Fable to create a custom app for browsing Hacker News by `/new`
+> Ask Claude Fable to create a custom app for browsing Hacker News by `/newest`
 
 Claude was able to one-shot this given a spec and screenshots.
 
