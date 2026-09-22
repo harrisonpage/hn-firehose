@@ -39,13 +39,10 @@ struct AboutPanel: View {
                 .padding(.bottom, 20)
 
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                row(label: "Author") {
-                    Text("Harrison Page").foregroundStyle(Theme.ink)
-                }
-                link(label: "Home Page", text: "harrison.page", url: Self.homeURL)
+                link(label: "Author", text: "harrison.page", url: Self.homeURL)
                 link(label: "Blog", text: "blog.harrison.page", url: Self.blogURL)
                 link(label: "Bluesky", text: "@harrison.page", url: Self.blueskyURL)
-                link(label: "Source", text: "github.com/harrisonpage/firehose-ios", url: Self.sourceURL)
+                link(label: "Source", text: "github.com/harrisonpage/hn-firehose", url: Self.sourceURL)
                 row(label: "License") {
                     Text("MIT").foregroundStyle(Theme.ink)
                 }
