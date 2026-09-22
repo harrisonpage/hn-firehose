@@ -3,3 +3,5 @@ build/
 DerivedData/
 xcuserdata/
 Sources/Firehose/Version.swift
+*.xcarchive
+*.ipa

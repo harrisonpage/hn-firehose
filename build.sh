@@ -8,12 +8,16 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         device)    DEST="device"; shift ;;
         simulator) DEST="simulator"; shift ;;
+        release)   DEST="release"; shift ;;
         *)         shift ;;
     esac
 done
 
 VERSION="1.0.0"
 BUILD="$(git rev-parse --short=8 HEAD 2>/dev/null || echo deadbeef)"
+# CFBundleVersion must be a small dotted integer that grows with every upload,
+# so the commit count is the build number; the short hash is only for display.
+BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 DATE="$(date '+%b %-d, %Y')"
 
 cat > Sources/Firehose/Version.swift <<EOF
@@ -25,7 +29,7 @@ enum Version {
 }
 EOF
 
-echo "firehose-ios ${VERSION}/${BUILD}"
+echo "firehose-ios ${VERSION}/${BUILD} (build ${BUILD_NUMBER})"
 
 # Device signing needs an Apple Developer team. The team ID is not checked in;
 # export DEVELOPMENT_TEAM (see harrison.sh in the private repo) or set your own.
@@ -42,6 +46,7 @@ fi
 if [ -n "$BUNDLE_ID_PREFIX" ]; then
     TEAM_ARGS+=("FIREHOSE_BUNDLE_ID_PREFIX=$BUNDLE_ID_PREFIX")
 fi
+VERSION_ARGS=("MARKETING_VERSION=$VERSION" "CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
 
 # Signing a device build needs the private key that lives in your login
 # keychain, and getting at it over SSH takes an extra step.
@@ -91,22 +96,21 @@ unlock_keychain_if_needed() {
     fi
 }
 
-if [ "$DEST" = "device" ]; then
-    unlock_keychain_if_needed
-    BUILD_LOG=$(mktemp)
-    trap 'rm -f "$BUILD_LOG"' EXIT
+# Runs xcodebuild with the given arguments, tees the log, and on failure
+# prints a hint for the two failures that are easy to misread.
+run_xcodebuild() {
+    local log status
+    log=$(mktemp)
     set +e
-    xcodebuild -project Firehose.xcodeproj -scheme Firehose \
-        -destination 'generic/platform=iOS' \
-        -allowProvisioningUpdates "${TEAM_ARGS[@]}" build 2>&1 | tee "$BUILD_LOG"
-    BUILD_STATUS=${PIPESTATUS[0]}
+    xcodebuild "$@" 2>&1 | tee "$log"
+    status=${PIPESTATUS[0]}
     set -e
-    if [ "$BUILD_STATUS" -ne 0 ] && grep -q 'is not installed. Please download and install the platform' "$BUILD_LOG"; then
+    if [ "$status" -ne 0 ] && grep -q 'is not installed. Please download and install the platform' "$log"; then
         echo
         echo "hint: your device is running a newer iOS than Xcode has platform support for."
         echo "fix:  xcodebuild -downloadPlatform iOS"
     fi
-    if [ "$BUILD_STATUS" -ne 0 ] && grep -q 'errSecInternalComponent' "$BUILD_LOG"; then
+    if [ "$status" -ne 0 ] && grep -q 'errSecInternalComponent' "$log"; then
         echo
         echo "hint: codesign could not reach the signing key in your login keychain."
         echo "fix:  security unlock-keychain ~/Library/Keychains/login.keychain-db"
@@ -114,8 +118,66 @@ if [ "$DEST" = "device" ]; then
         echo "      security set-key-partition-list -S apple-tool:,apple: -s \\"
         echo "          -k <password> ~/Library/Keychains/login.keychain-db"
     fi
-    exit $BUILD_STATUS
-else
-    xcodebuild -project Firehose.xcodeproj -scheme Firehose \
-        -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
-fi
+    rm -f "$log"
+    return "$status"
+}
+
+case "$DEST" in
+device)
+    unlock_keychain_if_needed
+    run_xcodebuild -project Firehose.xcodeproj -scheme Firehose \
+        -destination 'generic/platform=iOS' \
+        -allowProvisioningUpdates "${TEAM_ARGS[@]}" "${VERSION_ARGS[@]}" build
+    ;;
+release)
+    # Archive a Release build and export an App Store .ipa into build/export.
+    # Uploading is a separate, manual step (Transporter.app or an App Store
+    # Connect API key kept outside the repo); this script stops at the .ipa.
+    if [ -z "$DEVELOPMENT_TEAM" ]; then
+        echo "error: DEVELOPMENT_TEAM is not set; a release build cannot be signed without it." >&2
+        echo "       export DEVELOPMENT_TEAM=<your 10-character team ID> and try again." >&2
+        exit 1
+    fi
+    unlock_keychain_if_needed
+    mkdir -p build
+    # ExportOptions.plist carries the team ID, so it is generated here and
+    # lives under build/, which is gitignored.
+    cat > build/ExportOptions.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>teamID</key>
+    <string>${DEVELOPMENT_TEAM}</string>
+    <key>destination</key>
+    <string>export</string>
+    <key>uploadSymbols</key>
+    <true/>
+</dict>
+</plist>
+EOF
+    rm -rf build/Firehose.xcarchive build/export
+    run_xcodebuild -project Firehose.xcodeproj -scheme Firehose \
+        -configuration Release \
+        -destination 'generic/platform=iOS' \
+        -archivePath build/Firehose.xcarchive \
+        -allowProvisioningUpdates "${TEAM_ARGS[@]}" "${VERSION_ARGS[@]}" archive
+    # xcodebuild shells out to `rsync` to assemble the .ipa and expects Apple's
+    # openrsync. A Homebrew rsync earlier on PATH takes different options and
+    # the export dies with nothing more than "Copy failed", so put /usr/bin first.
+    PATH="/usr/bin:$PATH" run_xcodebuild -exportArchive \
+        -archivePath build/Firehose.xcarchive \
+        -exportOptionsPlist build/ExportOptions.plist \
+        -exportPath build/export \
+        -allowProvisioningUpdates
+    echo
+    echo "exported: $(pwd)/build/export/Firehose.ipa (${VERSION} build ${BUILD_NUMBER})"
+    echo "upload it with Transporter.app or an App Store Connect API key."
+    ;;
+*)
+    run_xcodebuild -project Firehose.xcodeproj -scheme Firehose \
+        -destination 'platform=iOS Simulator,name=iPhone 17 Pro' "${VERSION_ARGS[@]}" build
+    ;;
+esac
